@@ -1,11 +1,9 @@
 import { createScopedDmSecurityResolver } from "openclaw/plugin-sdk/channel-config-helpers";
 import { createAccountStatusSink } from "openclaw/plugin-sdk/channel-lifecycle";
-import { createPairingPrefixStripper } from "openclaw/plugin-sdk/channel-pairing";
 import {
   createOpenGroupPolicyRestrictSendersWarningCollector,
   projectAccountWarningCollector,
 } from "openclaw/plugin-sdk/channel-policy";
-import { createAttachedChannelResultAdapter } from "openclaw/plugin-sdk/channel-send-result";
 import { createChatChannelPlugin } from "openclaw/plugin-sdk/core";
 import { createLazyRuntimeNamedExport } from "openclaw/plugin-sdk/lazy-runtime";
 import {
@@ -75,6 +73,15 @@ const collectBlueBubblesSecurityWarnings =
     groupAllowFromPath: "channels.bluebubbles.groupAllowFrom",
     mentionGated: false,
   });
+
+function normalizeBlueBubblesPairingEntry(entry: string): string {
+  return normalizeBlueBubblesHandle(
+    entry
+      .trim()
+      .replace(/^bluebubbles:/i, "")
+      .trim(),
+  );
+}
 
 export const bluebubblesPlugin: ChannelPlugin<ResolvedBlueBubblesAccount, BlueBubblesProbe> =
   createChatChannelPlugin<ResolvedBlueBubblesAccount, BlueBubblesProbe>({
@@ -252,74 +259,71 @@ export const bluebubblesPlugin: ChannelPlugin<ResolvedBlueBubblesAccount, BlueBu
       }),
     },
     pairing: {
-      text: {
-        idLabel: "bluebubblesSenderId",
-        message: PAIRING_APPROVED_MESSAGE,
-        normalizeAllowEntry: createPairingPrefixStripper(
-          /^bluebubbles:/i,
-          normalizeBlueBubblesHandle,
-        ),
-        notify: async ({ cfg, id, message }) => {
-          await (
-            await loadBlueBubblesChannelRuntime()
-          ).sendMessageBlueBubbles(id, message, {
-            cfg: cfg,
-          });
-        },
+      idLabel: "bluebubblesSenderId",
+      normalizeAllowEntry: normalizeBlueBubblesPairingEntry,
+      notifyApproval: async ({ cfg, id }) => {
+        await (
+          await loadBlueBubblesChannelRuntime()
+        ).sendMessageBlueBubbles(id, PAIRING_APPROVED_MESSAGE, {
+          cfg,
+        });
       },
     },
     outbound: {
-      base: {
-        deliveryMode: "direct",
-        textChunkLimit: 4000,
-        resolveTarget: ({ to }) => {
-          const trimmed = to?.trim();
-          if (!trimmed) {
-            return {
-              ok: false,
-              error: new Error("Delivering to BlueBubbles requires --to <handle|chat_guid:GUID>"),
-            };
-          }
-          return { ok: true, to: trimmed };
-        },
-      },
-      attachedResults: {
-        channel: "bluebubbles",
-        sendText: async ({ cfg, to, text, accountId, replyToId }) => {
-          const runtime = await loadBlueBubblesChannelRuntime();
-          const rawReplyToId = typeof replyToId === "string" ? replyToId.trim() : "";
-          const replyToMessageGuid = rawReplyToId
-            ? runtime.resolveBlueBubblesMessageId(rawReplyToId, { requireKnownShortId: true })
-            : "";
-          return await runtime.sendMessageBlueBubbles(to, text, {
-            cfg: cfg,
-            accountId: accountId ?? undefined,
-            replyToMessageGuid: replyToMessageGuid || undefined,
-          });
-        },
-        sendMedia: async (ctx) => {
-          const runtime = await loadBlueBubblesChannelRuntime();
-          const { cfg, to, text, mediaUrl, accountId, replyToId } = ctx;
-          const { mediaPath, mediaBuffer, contentType, filename, caption } = ctx as {
-            mediaPath?: string;
-            mediaBuffer?: Uint8Array;
-            contentType?: string;
-            filename?: string;
-            caption?: string;
+      deliveryMode: "direct",
+      textChunkLimit: 4000,
+      resolveTarget: ({ to }) => {
+        const trimmed = to?.trim();
+        if (!trimmed) {
+          return {
+            ok: false,
+            error: new Error("Delivering to BlueBubbles requires --to <handle|chat_guid:GUID>"),
           };
-          return await runtime.sendBlueBubblesMedia({
-            cfg: cfg,
-            to,
-            mediaUrl,
-            mediaPath,
-            mediaBuffer,
-            contentType,
-            filename,
-            caption: caption ?? text ?? undefined,
-            replyToId: replyToId ?? null,
-            accountId: accountId ?? undefined,
-          });
-        },
+        }
+        return { ok: true, to: trimmed };
+      },
+      sendText: async ({ cfg, to, text, accountId, replyToId }) => {
+        const runtime = await loadBlueBubblesChannelRuntime();
+        const rawReplyToId = typeof replyToId === "string" ? replyToId.trim() : "";
+        const replyToMessageGuid = rawReplyToId
+          ? runtime.resolveBlueBubblesMessageId(rawReplyToId, { requireKnownShortId: true })
+          : "";
+        const result = await runtime.sendMessageBlueBubbles(to, text, {
+          cfg,
+          accountId: accountId ?? undefined,
+          replyToMessageGuid: replyToMessageGuid || undefined,
+        });
+        return {
+          channel: "bluebubbles",
+          ...result,
+        };
+      },
+      sendMedia: async (ctx) => {
+        const runtime = await loadBlueBubblesChannelRuntime();
+        const { cfg, to, text, mediaUrl, accountId, replyToId } = ctx;
+        const { mediaPath, mediaBuffer, contentType, filename, caption } = ctx as {
+          mediaPath?: string;
+          mediaBuffer?: Uint8Array;
+          contentType?: string;
+          filename?: string;
+          caption?: string;
+        };
+        const result = await runtime.sendBlueBubblesMedia({
+          cfg,
+          to,
+          mediaUrl,
+          mediaPath,
+          mediaBuffer,
+          contentType,
+          filename,
+          caption: caption ?? text ?? undefined,
+          replyToId: replyToId ?? null,
+          accountId: accountId ?? undefined,
+        });
+        return {
+          channel: "bluebubbles",
+          ...result,
+        };
       },
     },
   });

@@ -1,16 +1,22 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { bluebubblesMessageActions } from "./actions.js";
 import { sendBlueBubblesAttachment } from "./attachments.js";
 import { editBlueBubblesMessage, setGroupIconBlueBubbles } from "./chat.js";
 import { resolveBlueBubblesMessageId } from "./monitor.js";
-import { getCachedBlueBubblesPrivateApiStatus } from "./probe.js";
 import { sendBlueBubblesReaction } from "./reactions.js";
 import type { OpenClawConfig } from "./runtime-api.js";
 import { resolveChatGuidForTarget, sendMessageBlueBubbles } from "./send.js";
 
+vi.mock("../../../src/generated/bundled-channel-entries.generated.js", () => ({
+  GENERATED_BUNDLED_CHANNEL_ENTRIES: [],
+}));
+
 vi.mock("./accounts.js", async () => {
+  const actual = await vi.importActual<typeof import("./accounts.js")>("./accounts.js");
   const { createBlueBubblesAccountsMockModule } = await import("./test-harness.js");
-  return createBlueBubblesAccountsMockModule();
+  return {
+    ...actual,
+    ...createBlueBubblesAccountsMockModule(),
+  };
 });
 
 vi.mock("./reactions.js", () => ({
@@ -40,16 +46,38 @@ vi.mock("./monitor.js", () => ({
   resolveBlueBubblesMessageId: vi.fn((id: string) => id),
 }));
 
-vi.mock("./probe.js", () => ({
-  isMacOS26OrHigher: vi.fn().mockReturnValue(false),
-  getCachedBlueBubblesPrivateApiStatus: vi.fn().mockReturnValue(null),
-}));
+vi.mock("./probe.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./probe.js")>();
+  return {
+    ...actual,
+    isMacOS26OrHigher: vi.fn().mockReturnValue(false),
+    getCachedBlueBubblesPrivateApiStatus: vi.fn().mockReturnValue(null),
+  };
+});
 
 describe("bluebubblesMessageActions", () => {
-  const describeMessageTool = bluebubblesMessageActions.describeMessageTool!;
-  const supportsAction = bluebubblesMessageActions.supportsAction!;
-  const extractToolSend = bluebubblesMessageActions.extractToolSend!;
-  const handleAction = bluebubblesMessageActions.handleAction!;
+  let bluebubblesMessageActions: typeof import("./actions.js").bluebubblesMessageActions;
+  let getCachedBlueBubblesPrivateApiStatus: typeof import("./probe.js").getCachedBlueBubblesPrivateApiStatus;
+  const describeMessageTool = (
+    ...args: Parameters<
+      NonNullable<typeof import("./actions.js").bluebubblesMessageActions.describeMessageTool>
+    >
+  ) => bluebubblesMessageActions.describeMessageTool!(...args);
+  const supportsAction = (
+    ...args: Parameters<
+      NonNullable<typeof import("./actions.js").bluebubblesMessageActions.supportsAction>
+    >
+  ) => bluebubblesMessageActions.supportsAction!(...args);
+  const extractToolSend = (
+    ...args: Parameters<
+      NonNullable<typeof import("./actions.js").bluebubblesMessageActions.extractToolSend>
+    >
+  ) => bluebubblesMessageActions.extractToolSend!(...args);
+  const handleAction = (
+    ...args: Parameters<
+      NonNullable<typeof import("./actions.js").bluebubblesMessageActions.handleAction>
+    >
+  ) => bluebubblesMessageActions.handleAction!(...args);
   const callHandleAction = (ctx: Omit<Parameters<typeof handleAction>[0], "channel">) =>
     handleAction({ channel: "bluebubbles", ...ctx });
   const blueBubblesConfig = (): OpenClawConfig => ({
@@ -69,8 +97,11 @@ describe("bluebubblesMessageActions", () => {
     });
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules();
     vi.clearAllMocks();
+    ({ bluebubblesMessageActions } = await import("./actions.js"));
+    ({ getCachedBlueBubblesPrivateApiStatus } = await import("./probe.js"));
     vi.mocked(getCachedBlueBubblesPrivateApiStatus).mockReturnValue(null);
   });
 

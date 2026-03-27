@@ -6,8 +6,11 @@ import {
   normalizeWhatsAppTarget,
 } from "./normalize-target.js";
 
+vi.mock("../../../src/generated/bundled-channel-entries.generated.js", () => ({
+  GENERATED_BUNDLED_CHANNEL_ENTRIES: [],
+}));
+
 vi.mock("./runtime-api.js", async () => {
-  const actual = await vi.importActual<typeof import("./runtime-api.js")>("./runtime-api.js");
   const normalizeWhatsAppTarget = (value: string) => {
     if (value === "invalid-target") return null;
     // Simulate E.164 normalization: strip leading + and whatsapp: prefix.
@@ -16,8 +19,38 @@ vi.mock("./runtime-api.js", async () => {
   };
 
   return {
-    ...actual,
+    createActionGate: () => () => true,
+    createWhatsAppOutboundBase: ({
+      resolveTarget,
+    }: {
+      resolveTarget: (params: {
+        to?: string;
+        allowFrom: string[];
+        mode: "explicit" | "implicit" | "heartbeat";
+      }) => { ok: boolean; to?: string; error?: Error };
+    }) => ({
+      deliveryMode: "gateway" as const,
+      resolveTarget: ({
+        to,
+        allowFrom = [],
+        mode = "explicit",
+      }: {
+        to?: string;
+        allowFrom?: string[];
+        mode?: "explicit" | "implicit" | "heartbeat";
+      }) => resolveTarget({ to, allowFrom, mode }),
+    }),
+    DEFAULT_ACCOUNT_ID: "default",
+    formatWhatsAppConfigAllowFromEntries: (values: Array<string | number>) =>
+      values.map((value) => String(value)),
     getChatChannelMeta: () => ({ id: "whatsapp", label: "WhatsApp" }),
+    readStringParam: (params: Record<string, unknown>, key: string) => {
+      const value = params[key];
+      return typeof value === "string" ? value : undefined;
+    },
+    resolveWhatsAppGroupIntroHint: () => undefined,
+    resolveWhatsAppHeartbeatRecipients: () => [],
+    resolveWhatsAppMentionStripRegexes: () => [],
     normalizeWhatsAppTarget,
     isWhatsAppGroupJid: (value: string) => value.endsWith("@g.us"),
     resolveWhatsAppOutboundTarget: ({

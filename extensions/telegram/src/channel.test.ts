@@ -1,19 +1,18 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../../src/config/config.js";
 import type { PluginApprovalRequest } from "../../../src/infra/plugin-approvals.js";
 import type { PluginRuntime } from "../../../src/plugins/runtime/types.js";
 import { createStartAccountContext } from "../../../test/helpers/extensions/start-account-context.js";
 import type { ResolvedTelegramAccount } from "./accounts.js";
-import * as auditModule from "./audit.js";
-import { telegramPlugin } from "./channel.js";
-import * as monitorModule from "./monitor.js";
-import * as probeModule from "./probe.js";
-import { setTelegramRuntime } from "./runtime.js";
 
 const probeTelegramMock = vi.hoisted(() => vi.fn());
 const collectTelegramUnmentionedGroupIdsMock = vi.hoisted(() => vi.fn());
 const auditTelegramGroupMembershipMock = vi.hoisted(() => vi.fn());
 const monitorTelegramProviderMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../../../src/generated/bundled-channel-entries.generated.js", () => ({
+  GENERATED_BUNDLED_CHANNEL_ENTRIES: [],
+}));
 
 vi.mock("./probe.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./probe.js")>();
@@ -39,6 +38,9 @@ vi.mock("./monitor.js", async (importOriginal) => {
     monitorTelegramProvider: monitorTelegramProviderMock,
   };
 });
+
+let telegramPlugin: typeof import("./channel.js").telegramPlugin;
+let setTelegramRuntime: typeof import("./runtime.js").setTelegramRuntime;
 
 function createCfg(): OpenClawConfig {
   return {
@@ -80,39 +82,31 @@ function installTelegramRuntime(telegram?: Record<string, unknown>) {
 }
 
 function installGatewayRuntime(params?: { probeOk?: boolean; botUsername?: string }) {
-  const monitorTelegramProvider = vi
-    .spyOn(monitorModule, "monitorTelegramProvider")
-    .mockImplementation(async () => undefined);
-  const probeTelegram = vi
-    .spyOn(probeModule, "probeTelegram")
-    .mockImplementation(async () =>
-      params?.probeOk
-        ? { ok: true, bot: { username: params.botUsername ?? "bot" }, elapsedMs: 0 }
-        : { ok: false, elapsedMs: 0 },
-    );
-  const collectUnmentionedGroupIds = vi
-    .spyOn(auditModule, "collectTelegramUnmentionedGroupIds")
-    .mockImplementation(() => ({
-      groupIds: [] as string[],
-      unresolvedGroups: 0,
-      hasWildcardUnmentionedGroups: false,
-    }));
-  const auditGroupMembership = vi
-    .spyOn(auditModule, "auditTelegramGroupMembership")
-    .mockImplementation(async () => ({
-      ok: true,
-      checkedGroups: 0,
-      unresolvedGroups: 0,
-      hasWildcardUnmentionedGroups: false,
-      groups: [],
-      elapsedMs: 0,
-    }));
+  monitorTelegramProviderMock.mockImplementation(async () => undefined);
+  probeTelegramMock.mockImplementation(async () =>
+    params?.probeOk
+      ? { ok: true, bot: { username: params.botUsername ?? "bot" }, elapsedMs: 0 }
+      : { ok: false, elapsedMs: 0 },
+  );
+  collectTelegramUnmentionedGroupIdsMock.mockImplementation(() => ({
+    groupIds: [] as string[],
+    unresolvedGroups: 0,
+    hasWildcardUnmentionedGroups: false,
+  }));
+  auditTelegramGroupMembershipMock.mockImplementation(async () => ({
+    ok: true,
+    checkedGroups: 0,
+    unresolvedGroups: 0,
+    hasWildcardUnmentionedGroups: false,
+    groups: [],
+    elapsedMs: 0,
+  }));
   installTelegramRuntime();
   return {
-    monitorTelegramProvider,
-    probeTelegram,
-    collectUnmentionedGroupIds,
-    auditGroupMembership,
+    monitorTelegramProvider: monitorTelegramProviderMock,
+    probeTelegram: probeTelegramMock,
+    collectUnmentionedGroupIds: collectTelegramUnmentionedGroupIdsMock,
+    auditGroupMembership: auditTelegramGroupMembershipMock,
   };
 }
 
@@ -167,6 +161,13 @@ function createPluginApprovalRequest(
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+beforeEach(async () => {
+  vi.resetModules();
+  vi.clearAllMocks();
+  ({ telegramPlugin } = await import("./channel.js"));
+  ({ setTelegramRuntime } = await import("./runtime.js"));
 });
 
 describe("telegramPlugin groups", () => {

@@ -1,8 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const resolveIrcAccountMock = vi.hoisted(() => vi.fn());
 const buildIrcConnectOptionsMock = vi.hoisted(() => vi.fn());
 const connectIrcClientMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../../../src/generated/bundled-channel-entries.generated.js", () => ({
+  GENERATED_BUNDLED_CHANNEL_ENTRIES: [],
+}));
 
 vi.mock("./accounts.js", () => ({
   resolveIrcAccount: resolveIrcAccountMock,
@@ -16,9 +20,15 @@ vi.mock("./client.js", () => ({
   connectIrcClient: connectIrcClientMock,
 }));
 
-import { probeIrc } from "./probe.js";
-
 describe("probeIrc", () => {
+  let probeIrc: typeof import("./probe.js").probeIrc;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    ({ probeIrc } = await import("./probe.js"));
+  });
+
   it("returns a configuration error when the IRC account is incomplete", async () => {
     resolveIrcAccountMock.mockReturnValue({
       configured: false,

@@ -28,6 +28,10 @@ const hoisted = vi.hoisted(() => ({
   monitorIrcProvider: vi.fn(),
 }));
 
+vi.mock("../../../src/generated/bundled-channel-entries.generated.js", () => ({
+  GENERATED_BUNDLED_CHANNEL_ENTRIES: [],
+}));
+
 vi.mock("./monitor.js", async () => {
   const actual = await vi.importActual<typeof import("./monitor.js")>("./monitor.js");
   return {
@@ -328,11 +332,13 @@ describe("irc setup", () => {
   });
 
   it("keeps startAccount pending until abort, then stops the monitor", async () => {
+    vi.resetModules();
+    const { ircPlugin: runtimeFreshIrcPlugin } = await import("./channel.js");
     const stop = vi.fn();
     hoisted.monitorIrcProvider.mockResolvedValue({ stop });
 
     const { abort, task, isSettled } = startAccountAndTrackLifecycle({
-      startAccount: ircPlugin.gateway!.startAccount!,
+      startAccount: runtimeFreshIrcPlugin.gateway!.startAccount!,
       account: buildAccount(),
     });
 

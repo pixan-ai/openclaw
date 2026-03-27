@@ -2,16 +2,22 @@ import type { createChannelPairingChallengeIssuer } from "openclaw/plugin-sdk/ch
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createChannelPairingChallengeIssuerMock = vi.hoisted(() => vi.fn());
-const upsertChannelPairingRequestMock = vi.hoisted(() => vi.fn(async () => undefined));
+const upsertChannelPairingRequestMock = vi.hoisted(() =>
+  vi.fn(async () => ({ code: "123456", created: true })),
+);
 const withTelegramApiErrorLoggingMock = vi.hoisted(() => vi.fn(async ({ fn }) => await fn()));
 
-vi.mock("openclaw/plugin-sdk/channel-pairing", () => ({
-  createChannelPairingChallengeIssuer: createChannelPairingChallengeIssuerMock,
+vi.mock("../../../src/generated/bundled-channel-entries.generated.js", () => ({
+  GENERATED_BUNDLED_CHANNEL_ENTRIES: [],
 }));
 
-vi.mock("openclaw/plugin-sdk/conversation-runtime", () => ({
-  upsertChannelPairingRequest: upsertChannelPairingRequestMock,
-}));
+vi.mock("openclaw/plugin-sdk/channel-pairing", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("openclaw/plugin-sdk/channel-pairing")>();
+  return {
+    ...actual,
+    createChannelPairingChallengeIssuer: createChannelPairingChallengeIssuerMock,
+  };
+});
 
 vi.mock("./api-logging.js", () => ({
   withTelegramApiErrorLogging: withTelegramApiErrorLoggingMock,
@@ -116,6 +122,7 @@ describe("enforceTelegramDmAccess", () => {
       accountId: "main",
       bot: { api: { sendMessage } } as never,
       logger,
+      upsertPairingRequest: upsertChannelPairingRequestMock,
     });
 
     expect(allowed).toBe(false);

@@ -31,6 +31,10 @@ const hoisted = vi.hoisted(() => {
   };
 });
 
+vi.mock("../../../src/generated/bundled-channel-entries.generated.js", () => ({
+  GENERATED_BUNDLED_CHANNEL_ENTRIES: [],
+}));
+
 vi.mock("./runtime.js", () => ({
   getIrcRuntime: () => createSendCfgThreadingRuntime(hoisted),
 }));
@@ -59,11 +63,13 @@ vi.mock("./protocol.js", async () => {
   };
 });
 
-import { sendMessageIrc } from "./send.js";
-
 describe("sendMessageIrc cfg threading", () => {
-  beforeEach(() => {
+  let sendMessageIrc: typeof import("./send.js").sendMessageIrc;
+
+  beforeEach(async () => {
+    vi.resetModules();
     vi.clearAllMocks();
+    ({ sendMessageIrc } = await import("./send.js"));
   });
 
   it("uses explicitly provided cfg without loading runtime config", async () => {

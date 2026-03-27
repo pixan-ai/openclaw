@@ -65,7 +65,9 @@ const PRIVATE_API_ACTIONS = new Set<ChannelMessageActionName>([
 ]);
 
 function isSupportedBlueBubblesAction(action: ChannelMessageActionName): boolean {
-  return action === "upload-file" || BLUEBUBBLES_ACTION_NAMES.includes(action);
+  return (
+    action === "upload-file" || (BLUEBUBBLES_ACTION_NAMES as readonly string[]).includes(action)
+  );
 }
 
 export const bluebubblesMessageActions: ChannelMessageActionAdapter = {

@@ -2083,19 +2083,24 @@ describe("editMessageTelegram", () => {
   });
 
   it("retries editMessageTelegram on Telegram 5xx errors", async () => {
-    botApi.editMessageText
-      .mockRejectedValueOnce(Object.assign(new Error("502: Bad Gateway"), { error_code: 502 }))
-      .mockResolvedValueOnce({ message_id: 1, chat: { id: "123" } });
+    vi.useFakeTimers();
+    try {
+      botApi.editMessageText
+        .mockRejectedValueOnce(Object.assign(new Error("502: Bad Gateway"), { error_code: 502 }))
+        .mockResolvedValueOnce({ message_id: 1, chat: { id: "123" } });
 
-    await expect(
-      editMessageTelegram("123", 1, "hi", {
+      const promise = editMessageTelegram("123", 1, "hi", {
         token: "tok",
         cfg: {},
         retry: { attempts: 2, minDelayMs: 0, maxDelayMs: 0, jitter: 0 },
-      }),
-    ).resolves.toEqual({ ok: true, messageId: "1", chatId: "123" });
+      });
 
-    expect(botApi.editMessageText).toHaveBeenCalledTimes(2);
+      await vi.runAllTimersAsync();
+      await expect(promise).resolves.toEqual({ ok: true, messageId: "1", chatId: "123" });
+      expect(botApi.editMessageText).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("disables link previews when linkPreview is false", async () => {
