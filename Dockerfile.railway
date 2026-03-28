@@ -1,3 +1,3 @@
 FROM ghcr.io/openclaw/openclaw:latest
 USER root
-CMD ["sh", "-c", "mkdir -p /data/.openclaw /data/workspace && chown -R node:node /data && exec runuser -u node -- node /app/openclaw.mjs gateway --allow-unconfigured --bind lan --port ${PORT:-8080}"]
+CMD ["sh", "-c", "mkdir -p /data/.openclaw /data/workspace && chown -R node:node /data && runuser -u node -- node /app/openclaw.mjs config set gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback true && exec runuser -u node -- node /app/openclaw.mjs gateway --allow-unconfigured --bind lan --port ${PORT:-8080}"]
